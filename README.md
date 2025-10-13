@@ -1,1 +1,0 @@
-# Ajan-YZ-PROJE
