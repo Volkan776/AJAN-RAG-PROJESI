@@ -13,9 +13,14 @@ Bu proje, hukuk belgelerini (PDF ve JPG) analiz eden ve kullanıcıyla bu belgel
 
 -Öncelik sırası: 1.5-flash (hızlı/görsel), değilse 1.5-pro, o da yoksa ilk bulunan 
 
- -+-if 'models/gemini-1.5-flash' in modeller:
- -+-secilen_model = 'models/gemini-1.5-flash'
- -+-elif 'models/gemini-pro' in modeller:
- -+-secilen_model = 'models/gemini-pro'
- -+-else:
- -+-secilen_model = modeller[0]
+ if 'models/gemini-1.5-flash' in modeller:
+ 
+ secilen_model = 'models/gemini-1.5-flash'
+ 
+ elif 'models/gemini-pro' in modeller:
+ 
+ secilen_model = 'models/gemini-pro'
+ 
+ else:
+ 
+ secilen_model = modeller[0]
