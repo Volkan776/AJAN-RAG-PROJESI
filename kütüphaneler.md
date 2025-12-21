@@ -1,5 +1,5 @@
-google-generativeai--
-PyPDF2--
-gradio--
-Pillow--
-fpdf2--
+google-generativeai //
+PyPDF2 //
+gradio //
+Pillow //
+fpdf2 //
