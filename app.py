@@ -858,18 +858,375 @@ def main():
             else:
                 st.warning("⚠️ Lütfen arama kelimesi girin")
 
-    # Diğer tablar için benzer şekilde düzeltmeler...
+    # Tab 4: Belge Yazım
     with tab4:
-        st.header("📝 Belge Yazım Asistanı")
-        st.info("Belge oluşturma özellikleri yakında...")
+        st.header("📝 Belge Yazım Asistanı ve Editörü")
 
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("✏️ Yeni Belge Oluştur")
+
+            doc_type = st.selectbox(
+                "Belge Tipi:",
+                ["Sözleşme", "Dilekçe", "Dava Dosyası"]
+            )
+
+            doc_prompt = st.text_area(
+                "Belge detaylarını açıklayın:",
+                height=150,
+                placeholder="Örn: İki şirket arasında gizlilik sözleşmesi hazırlamak istiyorum..."
+            )
+
+            if st.button("📄 Belge Oluştur", type="primary", use_container_width=True):
+                if doc_prompt:
+                    with st.spinner("Belge hazırlanıyor..."):
+                        doc_type_map = {
+                            'Sözleşme': 'sozlesme',
+                            'Dilekçe': 'dilekce',
+                            'Dava Dosyası': 'dava'
+                        }
+
+                        generated_doc = st.session_state.ai_assistant.generate_document(
+                            doc_type_map[doc_type],
+                            doc_prompt
+                        )
+
+                        st.session_state.generated_document = generated_doc
+                        st.success("✅ Belge oluşturuldu!")
+                else:
+                    st.warning("Lütfen belge detaylarını girin.")
+
+        with col2:
+            st.subheader("🔍 Belge Analizi")
+
+            uploaded_file = st.file_uploader(
+                "Analiz edilecek belgeyi yükleyin:",
+                type=['pdf', 'docx', 'txt']
+            )
+
+            if uploaded_file:
+                analysis_type = st.selectbox(
+                    "Analiz Tipi:",
+                    ["Genel Analiz", "Risk Analizi", "Madde İncelemesi"]
+                )
+
+                if st.button("🔬 Analiz Et", use_container_width=True):
+                    with st.spinner("Belge analiz ediliyor..."):
+                        if uploaded_file.name.endswith('.pdf'):
+                            doc_text = extract_text_from_pdf(uploaded_file)
+                        elif uploaded_file.name.endswith('.docx'):
+                            doc_text = extract_text_from_docx(uploaded_file)
+                        else:
+                            doc_text = uploaded_file.read().decode('utf-8')
+
+                        analysis_type_map = {
+                            'Genel Analiz': 'genel',
+                            'Risk Analizi': 'risk',
+                            'Madde İncelemesi': 'madde'
+                        }
+
+                        analysis = st.session_state.ai_assistant.analyze_document(
+                            doc_text,
+                            analysis_type_map[analysis_type]
+                        )
+
+                        st.session_state.document_analysis = analysis
+                        st.success("✅ Analiz tamamlandı!")
+
+        # Oluşturulan belgeyi göster
+        if 'generated_document' in st.session_state:
+            st.divider()
+            st.subheader("📋 Oluşturulan Belge")
+
+            edited_doc = st.text_area(
+                "Belgeyi düzenleyin:",
+                value=st.session_state.generated_document,
+                height=400
+            )
+
+            col_a, col_b, col_c = st.columns(3)
+
+            with col_a:
+                if st.button("💾 DOCX Olarak İndir"):
+                    doc = Document()
+                    for paragraph in edited_doc.split('\n'):
+                        doc.add_paragraph(paragraph)
+
+                    buffer = io.BytesIO()
+                    doc.save(buffer)
+                    buffer.seek(0)
+
+                    st.download_button(
+                        "📥 İndir",
+                        buffer,
+                        file_name=f"belge_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+
+            with col_b:
+                if st.button("📄 PDF Olarak İndir"):
+                    st.info("PDF oluşturma özelliği yakında eklenecek")
+
+            with col_c:
+                if st.button("📂 Klasöre Kaydet"):
+                    st.session_state.save_to_folder = edited_doc
+
+        # Analiz sonucunu göster
+        if 'document_analysis' in st.session_state:
+            st.divider()
+            st.subheader("🔬 Analiz Sonucu")
+            st.markdown(st.session_state.document_analysis)
+
+    # Tab 5: Dava Yönetimi
     with tab5:
-        st.header("📂 Dava Yönetimi")
-        st.info("Dava yönetimi özellikleri yakında...")
+        st.header("📂 Klasörler ile Dava Yönetimi")
 
+        col1, col2 = st.columns([1, 2])
+
+        with col1:
+            st.subheader("📁 Klasörler")
+
+            # Yeni klasör oluştur
+            with st.expander("➕ Yeni Klasör"):
+                new_folder_name = st.text_input("Klasör Adı:", key="new_folder")
+                folder_desc = st.text_area("Açıklama:", key="folder_desc")
+
+                if st.button("Oluştur"):
+                    if new_folder_name:
+                        if 'folders' not in st.session_state:
+                            st.session_state.folders = {}
+
+                        folder_id = hashlib.md5(new_folder_name.encode()).hexdigest()[:8]
+                        st.session_state.folders[folder_id] = {
+                            'name': new_folder_name,
+                            'description': folder_desc,
+                            'created': datetime.now().isoformat(),
+                            'documents': [],
+                            'notes': []
+                        }
+                        save_folders()
+                        st.success(f"✅ Klasör '{new_folder_name}' oluşturuldu")
+                        st.rerun()
+
+            # Klasör listesi
+            if 'folders' in st.session_state and st.session_state.folders:
+                for folder_id, folder_data in st.session_state.folders.items():
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="folder-card">
+                        📁 <strong>{folder_data['name']}</strong><br>
+                        <small>{len(folder_data.get('documents', []))} belge</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        if st.button(f"Aç", key=f"open_{folder_id}"):
+                            st.session_state.active_folder = folder_id
+                            st.rerun()
+            else:
+                st.info("Henüz klasör yok. Yeni klasör oluşturun.")
+
+        with col2:
+            if 'active_folder' in st.session_state:
+                folder_id = st.session_state.active_folder
+                folder = st.session_state.folders.get(folder_id, {})
+
+                st.subheader(f"📂 {folder.get('name', 'Klasör')}")
+                st.caption(folder.get('description', ''))
+
+                # Belge yükleme
+                with st.expander("📤 Belge Yükle"):
+                    uploaded_doc = st.file_uploader(
+                        "Dosya seçin:",
+                        type=['pdf', 'docx', 'txt', 'jpg', 'png'],
+                        key=f"upload_{folder_id}"
+                    )
+
+                    doc_note = st.text_input("Not:", key=f"note_{folder_id}")
+
+                    if st.button("Ekle", key=f"add_{folder_id}"):
+                        if uploaded_doc:
+                            doc_data = {
+                                'filename': uploaded_doc.name,
+                                'type': uploaded_doc.type,
+                                'added': datetime.now().isoformat(),
+                                'note': doc_note,
+                                'size': uploaded_doc.size
+                            }
+
+                            if 'documents' not in folder:
+                                folder['documents'] = []
+
+                            folder['documents'].append(doc_data)
+                            save_folders()
+                            st.success(f"✅ '{uploaded_doc.name}' eklendi")
+                            st.rerun()
+
+                # Belgeler listesi
+                st.subheader("📑 Belgeler")
+
+                documents = folder.get('documents', [])
+                if documents:
+                    for idx, doc in enumerate(documents):
+                        with st.container():
+                            st.markdown(f"""
+                            <div class="doc-card">
+                            📄 <strong>{doc['filename']}</strong><br>
+                            <small>{doc.get('note', '')}</small><br>
+                            <small>Eklenme: {doc['added'][:10]}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            if st.button("🗑️ Sil", key=f"del_{folder_id}_{idx}"):
+                                documents.pop(idx)
+                                save_folders()
+                                st.rerun()
+                else:
+                    st.info("Henüz belge yok")
+
+                # Notlar
+                st.subheader("📝 Notlar")
+
+                new_note = st.text_area("Yeni not:", key=f"new_note_{folder_id}")
+                if st.button("Not Ekle", key=f"add_note_{folder_id}"):
+                    if new_note:
+                        if 'notes' not in folder:
+                            folder['notes'] = []
+
+                        folder['notes'].append({
+                            'text': new_note,
+                            'created': datetime.now().isoformat()
+                        })
+                        save_folders()
+                        st.success("✅ Not eklendi")
+                        st.rerun()
+
+                notes = folder.get('notes', [])
+                if notes:
+                    for idx, note in enumerate(notes):
+                        st.text_area(
+                            f"Not {idx+1} ({note['created'][:10]}):",
+                            value=note['text'],
+                            key=f"note_view_{folder_id}_{idx}",
+                            disabled=True
+                        )
+            else:
+                st.info("👈 Sol menüden bir klasör seçin")
+
+    # Tab 6: Veritabanı
     with tab6:
         st.header("📚 Veritabanı Yönetimi")
-        st.info("Veritabanı özellikleri yakında...")
+
+        tab6_1, tab6_2 = st.tabs(["Belge Ekle", "Toplu Yükleme"])
+
+        with tab6_1:
+            st.subheader("➕ Tekil Belge Ekle")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                collection = st.selectbox(
+                    "Koleksiyon:",
+                    ["İçtihatlar", "Mevzuat", "Sözleşmeler", "Dilekçe"]
+                )
+
+                doc_title = st.text_input("Belge Başlığı:")
+                doc_category = st.text_input("Kategori:")
+
+            with col2:
+                doc_date = st.date_input("Tarih:")
+                doc_source = st.text_input("Kaynak:")
+
+            doc_content = st.text_area(
+                "Belge İçeriği:",
+                height=200,
+                placeholder="Belge metnini buraya yapıştırın..."
+            )
+
+            if st.button("💾 Veritabanına Ekle", type="primary"):
+                if doc_content and doc_title:
+                    collection_map = {
+                        'İçtihatlar': 'ictihatlar',
+                        'Mevzuat': 'mevzuat',
+                        'Sözleşmeler': 'sozlesmeler',
+                        'Dilekçe': 'dilekce'
+                    }
+
+                    metadata = {
+                        'title': doc_title,
+                        'category': doc_category,
+                        'date': str(doc_date),
+                        'source': doc_source,
+                        'added': datetime.now().isoformat()
+                    }
+
+                    success = st.session_state.ai_assistant.add_document(
+                        collection_map[collection],
+                        doc_content,
+                        metadata
+                    )
+
+                    if success:
+                        st.success(f"✅ Belge '{doc_title}' başarıyla eklendi!")
+                    else:
+                        st.error("❌ Belge eklenirken hata oluştu")
+                else:
+                    st.warning("Lütfen başlık ve içerik girin")
+
+        with tab6_2:
+            st.subheader("📦 Toplu Belge Yükleme")
+
+            st.info("""
+            **Toplu yükleme formatı:**
+            - JSON dosyası yükleyin
+            - Her belge şu formatta olmalı:
+            ```json
+            {
+                "collection": "ictihatlar",
+                "title": "Belge Başlığı",
+                "content": "Belge içeriği...",
+                "metadata": {"key": "value"}
+            }
+            ```
+            """)
+
+            bulk_file = st.file_uploader(
+                "JSON dosyası seçin:",
+                type=['json']
+            )
+
+            if bulk_file and st.button("📥 Toplu Yükle"):
+                try:
+                    data = json.load(bulk_file)
+
+                    if isinstance(data, list):
+                        success_count = 0
+                        progress_bar = st.progress(0)
+
+                        for idx, item in enumerate(data):
+                            collection = item.get('collection', 'ictihatlar')
+                            title = item.get('title', f'Belge {idx+1}')
+                            content = item.get('content', '')
+                            metadata = item.get('metadata', {})
+                            metadata['title'] = title
+
+                            if content:
+                                success = st.session_state.ai_assistant.add_document(
+                                    collection,
+                                    content,
+                                    metadata
+                                )
+                                if success:
+                                    success_count += 1
+
+                            progress_bar.progress((idx + 1) / len(data))
+
+                        st.success(f"✅ {success_count}/{len(data)} belge başarıyla eklendi!")
+                    else:
+                        st.error("JSON dosyası liste formatında olmalı")
+
+                except Exception as e:
+                    st.error(f"Hata: {str(e)}")
 
 if __name__ == "__main__":
     main()
